@@ -2,6 +2,7 @@
 using CrystalDecisions.Shared;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -16,10 +17,11 @@ namespace REPORT_CONVERTOR
         string outputpath = "";
         string outputOption = "PortableDocFormat";
         ReportDocument cryRpt;
+        int PARALLELISM = 4;
         public Form1()
         {
             InitializeComponent();
-            cryRpt = new ReportDocument();
+            //cryRpt = new ReportDocument();
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -49,7 +51,7 @@ namespace REPORT_CONVERTOR
             }
         }
 
-        private async void button2_Click(object sender, EventArgs e)
+        private void button2_Click(object sender, EventArgs e)
         {
             if (inputDirectory.Length == 0 || outputpath.Length == 0 || inputDirectory.Equals(outputpath))
             {
@@ -66,46 +68,44 @@ namespace REPORT_CONVERTOR
             {
                 foreach (string file in inputfiles)
                 {
-                    message = await ProcessReports(outputpath, Path.GetFileNameWithoutExtension(file), file);
+                    message = ProcessReports(outputpath, Path.GetFileNameWithoutExtension(file), file);
                     listBox1.Items.Add(message);
                     count++;
                     label6.Text = count + " of " + filecount;
-                    using (StreamWriter w = File.AppendText("log.txt"))
-                    {
-                        Log(message, w);
-                    }
                 }
+                label6.Text = "Completed";
+                button2.Text = "Convert";
+                button2.Enabled = true;
             }
             else
             {
                 count = 0;
                 filecount = Directory.GetFiles(inputDirectory, "*.rpt", SearchOption.TopDirectoryOnly).Length;
                 label6.Text = "0 of " + filecount;
-                foreach (string filename in Directory.GetFiles(inputDirectory, "*.rpt", SearchOption.TopDirectoryOnly))
+                //Parallel Foreach Implementation
+                var yourForeachTask = Task.Run(() =>
                 {
-                    message = await ProcessReports(outputpath, Path.GetFileNameWithoutExtension(filename), filename);
-                    listBox1.Items.Add(message);
-                    count++;
-                    label6.Text = count + " of " + filecount;
-                    using (StreamWriter w = File.AppendText("log.txt"))
+                    Parallel.ForEach(Directory.GetFiles(inputDirectory, "*.rpt", SearchOption.TopDirectoryOnly), new ParallelOptions { MaxDegreeOfParallelism = PARALLELISM }, (currentFile) =>
                     {
-                        Log(message, w);
-                    }
-                }
+                        message = ProcessReports(outputpath, Path.GetFileNameWithoutExtension(currentFile), currentFile);
+                        //listBox1.Items.Add(message);    
+                        count++;
+                        BeginInvoke((Action)delegate
+                        {
+                            label6.Text = count + " of " + filecount;
+                            listBox1.Items.Add(message);
+                        });
+                        Console.WriteLine("Processing {0} on thread {1}", currentFile, Thread.CurrentThread.ManagedThreadId);
+                    });
+                });
+                //label6.Text = "Completed";
+                //button2.Text = "Convert";
+                //button2.Enabled = true;
             }
-            label6.Text = "Completed";
-            button2.Text = "Convert";
-            button2.Enabled = true;
         }
-
-        private void label1_Click(object sender, EventArgs e)
+        public string ProcessReports(string outputpath, string filenameNoExtension, string file)
         {
-
-        }
-        public async Task<string> ProcessReports(string outputpath, string filenameNoExtension, string file)
-        {
-            return await Task.Run(() =>
-            {
+                ReportDocument cryRpt = new ReportDocument();
                 cryRpt.Load(file);
                 switch (outputOption)
                 {
@@ -158,12 +158,9 @@ namespace REPORT_CONVERTOR
                         cryRpt.ExportToDisk(ExportFormatType.PortableDocFormat, outputpath + "\\" + filenameNoExtension + ".pdf");
                         break;
                 }
+                cryRpt.Close();
+                cryRpt.Dispose();
                 return file;
-            });
-            /*
-             * Separtate Thread for UI Performance
-             *              * 
-            */
         }
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
@@ -175,11 +172,6 @@ namespace REPORT_CONVERTOR
             w.Write("\nLog Entry : ");
             w.Write(" {0} {1}", DateTime.Now.ToLongTimeString(), DateTime.Now.ToLongDateString());
             w.Write("  :{0}", logMessage);
-        }
-
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
         }
 
         private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
