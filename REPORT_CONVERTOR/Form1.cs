@@ -16,8 +16,8 @@ namespace REPORT_CONVERTOR
         string inputDirectory = "";
         string outputpath = "";
         string outputOption = "PortableDocFormat";
-        ReportDocument cryRpt;
-        int PARALLELISM = 4;
+        //ReportDocument cryRpt;
+        //int PARALLELISM = 4; -- set to Environment.ProcessorCount
         public Form1()
         {
             InitializeComponent();
@@ -85,10 +85,9 @@ namespace REPORT_CONVERTOR
                 //Parallel Foreach Implementation
                 var yourForeachTask = Task.Run(() =>
                 {
-                    Parallel.ForEach(Directory.GetFiles(inputDirectory, "*.rpt", SearchOption.TopDirectoryOnly), new ParallelOptions { MaxDegreeOfParallelism = PARALLELISM }, (currentFile) =>
+                    Parallel.ForEach(Directory.GetFiles(inputDirectory, "*.rpt", SearchOption.TopDirectoryOnly), new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, (currentFile) =>
                     {
                         message = ProcessReports(outputpath, Path.GetFileNameWithoutExtension(currentFile), currentFile);
-                        //listBox1.Items.Add(message);    
                         count++;
                         BeginInvoke((Action)delegate
                         {
@@ -105,7 +104,8 @@ namespace REPORT_CONVERTOR
         }
         public string ProcessReports(string outputpath, string filenameNoExtension, string file)
         {
-                ReportDocument cryRpt = new ReportDocument();
+            using (ReportDocument cryRpt = new ReportDocument())
+            {
                 cryRpt.Load(file);
                 switch (outputOption)
                 {
@@ -160,7 +160,8 @@ namespace REPORT_CONVERTOR
                 }
                 cryRpt.Close();
                 cryRpt.Dispose();
-                return file;
+            }
+            return file;
         }
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
